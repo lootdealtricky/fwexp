@@ -9,7 +9,7 @@
     "node": "18.x"
   },
   "dependencies": {
-    "telegram": "^2.26.16",
+    "telegram": "^2.26.21",
     "axios": "^1.6.7"
   }
 }
