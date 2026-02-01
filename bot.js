@@ -2,6 +2,7 @@ import { TelegramClient } from "telegram"
 import { StringSession } from "telegram/sessions/index.js"
 import { NewMessage } from "telegram/events/index.js"
 import axios from "axios"
+import http from "http"
 
 /* ---------- CONFIG ---------- */
 const apiId = Number(process.env.API_ID)
@@ -15,7 +16,7 @@ if (!apiId || !apiHash || !process.env.STRING_SESSION) {
 const SOURCE_IDS = process.env.SOURCE_IDS.split(",").map(x => x.trim())
 const TARGET_ID = process.env.TARGET_ID
 
-/* ---------- CLIENT ---------- */
+/* ---------- TELEGRAM CLIENT ---------- */
 const client = new TelegramClient(stringSession, apiId, apiHash, {
   connectionRetries: 5,
 })
@@ -71,13 +72,13 @@ async function containsMeesho(urls) {
   return false
 }
 
-/* ---------- START ---------- */
-async function start() {
+/* ---------- START TELEGRAM BOT ---------- */
+async function startBot() {
   await client.start({
     onError: err => console.log(err),
   })
 
-  //console.log("✅ USERBOT STARTED")
+  console.log("✅ TELEGRAM USERBOT STARTED")
 
   client.addEventHandler(async (event) => {
     const msg = event.message
@@ -92,6 +93,7 @@ async function start() {
     let text = msg.text || ""
     const urls = extractUrls(text)
 
+    // ❌ Cancel if any Meesho link found (even short)
     if (urls.length > 0 && await containsMeesho(urls)) {
       console.log("⛔ SKIPPED (Meesho detected)")
       return
@@ -116,4 +118,18 @@ async function start() {
   }, new NewMessage({}))
 }
 
-start()
+/* ---------- DUMMY HTTP SERVER (RENDER FIX) ---------- */
+function startServer() {
+  const PORT = process.env.PORT || 3000
+
+  http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" })
+    res.end("Telegram bot is running")
+  }).listen(PORT, () => {
+    console.log("🌐 HTTP server listening on port", PORT)
+  })
+}
+
+/* ---------- RUN BOTH ---------- */
+startBot()
+startServer()
