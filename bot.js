@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { TelegramClient } from "telegram"
 import { StringSession } from "telegram/sessions/index.js"
-import { NewMessage } from "telegram/events"
+import { NewMessage } from "telegram/events/index.js"
 
 const apiId = Number(process.env.API_ID)
 const apiHash = process.env.API_HASH
