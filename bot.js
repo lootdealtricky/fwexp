@@ -77,7 +77,7 @@ async function start() {
     onError: err => console.log(err),
   })
 
-  console.log("✅ USERBOT STARTED")
+  //console.log("✅ USERBOT STARTED")
 
   client.addEventHandler(async (event) => {
     const msg = event.message
