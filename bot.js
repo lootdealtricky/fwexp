@@ -1,8 +1,10 @@
 import 'dotenv/config'
 import { TelegramClient } from "telegram"
-import { StringSession } from "telegram/sessions/index.js"
-import { NewMessage } from "telegram/events/index.js"
+import { StringSession } from "telegram/sessions"
+import { NewMessage } from "telegram/events"
+import axios from "axios"
 
+/* ---------- CONFIG ---------- */
 const apiId = Number(process.env.API_ID)
 const apiHash = process.env.API_HASH
 const stringSession = new StringSession(process.env.STRING_SESSION || "")
@@ -10,6 +12,7 @@ const stringSession = new StringSession(process.env.STRING_SESSION || "")
 const SOURCE_IDS = process.env.SOURCE_IDS.split(",").map(x => x.trim())
 const TARGET_ID = process.env.TARGET_ID
 
+/* ---------- CLIENT ---------- */
 const client = new TelegramClient(stringSession, apiId, apiHash, {
   connectionRetries: 5,
 })
@@ -33,28 +36,49 @@ Search @Lootdealtricky in Telegram App
   return text.replace(oldBlock, newBlock)
 }
 
-/* ---------- URL FILTER ---------- */
+/* ---------- URL EXTRACT ---------- */
 function extractUrls(text) {
-  return text.match(/https?:\/\/[^\s]+/g) || []
+  return text.match(/https?:\/\/[^\s]+/gi) || []
 }
 
-function shouldSkip(urls) {
-  if (urls.length === 0) return false
-  return urls.every(u => u.includes("meesho.com"))
+/* ---------- URL UNSHORT ---------- */
+async function unshortUrl(url) {
+  try {
+    const res = await axios.get(url, {
+      maxRedirects: 10,
+      timeout: 8000,
+      validateStatus: null,
+    })
+    return res.request?.res?.responseUrl || url
+  } catch {
+    return url
+  }
+}
+
+/* ---------- MEESHO CHECK ---------- */
+async function containsMeesho(urls) {
+  for (const url of urls) {
+    const finalUrl = await unshortUrl(url)
+    console.log("🔗 Final URL:", finalUrl)
+
+    if (finalUrl.toLowerCase().includes("meesho.com")) {
+      return true
+    }
+  }
+  return false
 }
 
 /* ---------- START ---------- */
 async function start() {
   await client.start({
-    phoneNumber: async () => process.env.PHONE,
-    password: async () => "",
+    phoneNumber: async () => process.env.PHONE || "",
     phoneCode: async () => "",
+    password: async () => "",
     onError: err => console.log(err),
   })
 
-  console.log("✅ Userbot Started")
-
-  console.log("🔑 STRING SESSION (save this):")
+  console.log("✅ USERBOT STARTED")
+  console.log("🔐 SAVE THIS STRING SESSION:")
   console.log(client.session.save())
 
   client.addEventHandler(async (event) => {
@@ -70,9 +94,13 @@ async function start() {
     let text = msg.text || ""
     const urls = extractUrls(text)
 
-    if (shouldSkip(urls)) {
-      console.log("⏭️ Skipped (only meesho.com)")
-      return
+    /* ❌ CANCEL IF ANY MEESHO LINK (EVEN SHORT) */
+    if (urls.length > 0) {
+      const blocked = await containsMeesho(urls)
+      if (blocked) {
+        console.log("⛔ SKIPPED (Meesho detected)")
+        return
+      }
     }
 
     if (text) text = replaceText(text)
@@ -89,11 +117,10 @@ async function start() {
 
       console.log("✅ Forwarded")
     } catch (e) {
-      console.error("❌ Send failed:", e.message)
+      console.error("❌ Send Error:", e.message)
     }
 
   }, new NewMessage({}))
-
 }
 
 start()
