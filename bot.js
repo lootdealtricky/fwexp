@@ -6,7 +6,11 @@ import axios from "axios"
 /* ---------- CONFIG ---------- */
 const apiId = Number(process.env.API_ID)
 const apiHash = process.env.API_HASH
-const stringSession = new StringSession(process.env.STRING_SESSION || "")
+const stringSession = new StringSession(process.env.STRING_SESSION)
+
+if (!apiId || !apiHash || !process.env.STRING_SESSION) {
+  throw new Error("❌ Missing API_ID / API_HASH / STRING_SESSION")
+}
 
 const SOURCE_IDS = process.env.SOURCE_IDS.split(",").map(x => x.trim())
 const TARGET_ID = process.env.TARGET_ID
@@ -70,15 +74,10 @@ async function containsMeesho(urls) {
 /* ---------- START ---------- */
 async function start() {
   await client.start({
-    phoneNumber: async () => process.env.PHONE || "",
-    phoneCode: async () => "",
-    password: async () => "",
     onError: err => console.log(err),
   })
 
   console.log("✅ USERBOT STARTED")
-  console.log("🔐 SAVE THIS STRING SESSION:")
-  console.log(client.session.save())
 
   client.addEventHandler(async (event) => {
     const msg = event.message
@@ -93,13 +92,9 @@ async function start() {
     let text = msg.text || ""
     const urls = extractUrls(text)
 
-    /* ❌ CANCEL IF ANY MEESHO LINK (EVEN SHORT) */
-    if (urls.length > 0) {
-      const blocked = await containsMeesho(urls)
-      if (blocked) {
-        console.log("⛔ SKIPPED (Meesho detected)")
-        return
-      }
+    if (urls.length > 0 && await containsMeesho(urls)) {
+      console.log("⛔ SKIPPED (Meesho detected)")
+      return
     }
 
     if (text) text = replaceText(text)
@@ -113,7 +108,6 @@ async function start() {
       } else {
         await client.sendMessage(TARGET_ID, { message: text })
       }
-
       console.log("✅ Forwarded")
     } catch (e) {
       console.error("❌ Send Error:", e.message)
