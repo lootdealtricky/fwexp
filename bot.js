@@ -72,12 +72,9 @@ async function containsMeesho(urls) {
   return false
 }
 
-/* ========== TELEGRAM BOT START ========== */
+/* ========== TELEGRAM BOT ========== */
 async function startBot() {
-  await client.start({
-    onError: err => console.log(err),
-  })
-
+  await client.start({ onError: err => console.log(err) })
   console.log("✅ TELEGRAM USERBOT STARTED")
 
   client.addEventHandler(async (event) => {
@@ -93,7 +90,7 @@ async function startBot() {
     let text = msg.text || ""
     const urls = extractUrls(text)
 
-    // ❌ Skip if any Meesho link found
+    // ❌ Skip if any Meesho link (even short)
     if (urls.length && await containsMeesho(urls)) {
       console.log("⛔ SKIPPED (Meesho detected)")
       return
@@ -103,16 +100,13 @@ async function startBot() {
 
     try {
       if (msg.media) {
-  // media ko direct forward karo (safe)
-  await client.forwardMessages(TARGET_ID, {
-    messages: [msg.id],
-    fromPeer: msg.peerId,
-  })
-} else {
-  // text-only message with replacement
-  await client.sendMessage(TARGET_ID, { message: text })
-}
+        // ✅ SAFE METHOD: direct forward (NO re-upload)
+        await client.forwardMessages(TARGET_ID, {
+          messages: [msg.id],
+          fromPeer: msg.peerId,
+        })
       } else {
+        // text-only with replacement
         await client.sendMessage(TARGET_ID, { message: text })
       }
 
