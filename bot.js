@@ -4,7 +4,7 @@ import { NewMessage } from "telegram/events/index.js"
 import axios from "axios"
 import http from "http"
 
-/* ---------- CONFIG ---------- */
+/* ========== ENV CHECK ========== */
 const apiId = Number(process.env.API_ID)
 const apiHash = process.env.API_HASH
 const stringSession = new StringSession(process.env.STRING_SESSION)
@@ -16,12 +16,12 @@ if (!apiId || !apiHash || !process.env.STRING_SESSION) {
 const SOURCE_IDS = process.env.SOURCE_IDS.split(",").map(x => x.trim())
 const TARGET_ID = process.env.TARGET_ID
 
-/* ---------- TELEGRAM CLIENT ---------- */
+/* ========== TELEGRAM CLIENT ========== */
 const client = new TelegramClient(stringSession, apiId, apiHash, {
   connectionRetries: 5,
 })
 
-/* ---------- TEXT REPLACER ---------- */
+/* ========== TEXT REPLACER ========== */
 function replaceText(text) {
   const oldBlock = /#Meesho[\s\S]*?Lootdealtricky\.in\/url\/channels/i
 
@@ -40,12 +40,12 @@ Search @Lootdealtricky in Telegram App
   return text.replace(oldBlock, newBlock)
 }
 
-/* ---------- URL EXTRACT ---------- */
+/* ========== URL EXTRACT ========== */
 function extractUrls(text) {
   return text.match(/https?:\/\/[^\s]+/gi) || []
 }
 
-/* ---------- URL UNSHORT ---------- */
+/* ========== URL UNSHORT ========== */
 async function unshortUrl(url) {
   try {
     const res = await axios.get(url, {
@@ -59,7 +59,7 @@ async function unshortUrl(url) {
   }
 }
 
-/* ---------- MEESHO CHECK ---------- */
+/* ========== MEESHO CHECK ========== */
 async function containsMeesho(urls) {
   for (const url of urls) {
     const finalUrl = await unshortUrl(url)
@@ -72,7 +72,7 @@ async function containsMeesho(urls) {
   return false
 }
 
-/* ---------- START TELEGRAM BOT ---------- */
+/* ========== TELEGRAM BOT START ========== */
 async function startBot() {
   await client.start({
     onError: err => console.log(err),
@@ -93,8 +93,8 @@ async function startBot() {
     let text = msg.text || ""
     const urls = extractUrls(text)
 
-    // ❌ Cancel if any Meesho link found (even short)
-    if (urls.length > 0 && await containsMeesho(urls)) {
+    // ❌ Skip if any Meesho link found
+    if (urls.length && await containsMeesho(urls)) {
       console.log("⛔ SKIPPED (Meesho detected)")
       return
     }
@@ -103,14 +103,18 @@ async function startBot() {
 
     try {
       if (msg.media) {
+        const buffer = await client.downloadMedia(msg.media)
+
         await client.sendFile(TARGET_ID, {
-          file: msg.media,
+          file: buffer,
           caption: text || undefined,
         })
       } else {
         await client.sendMessage(TARGET_ID, { message: text })
       }
+
       console.log("✅ Forwarded")
+
     } catch (e) {
       console.error("❌ Send Error:", e.message)
     }
@@ -118,9 +122,9 @@ async function startBot() {
   }, new NewMessage({}))
 }
 
-/* ---------- DUMMY HTTP SERVER (RENDER FIX) ---------- */
+/* ========== DUMMY HTTP SERVER (RENDER FIX) ========== */
 function startServer() {
-  const PORT = process.env.PORT || 3000
+  const PORT = process.env.PORT || 10000
 
   http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "text/plain" })
@@ -130,6 +134,6 @@ function startServer() {
   })
 }
 
-/* ---------- RUN BOTH ---------- */
+/* ========== RUN ========== */
 startBot()
 startServer()
