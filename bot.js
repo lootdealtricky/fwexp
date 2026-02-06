@@ -103,12 +103,15 @@ async function startBot() {
 
     try {
       if (msg.media) {
-        const buffer = await client.downloadMedia(msg.media)
-
-        await client.sendFile(TARGET_ID, {
-          file: buffer,
-          caption: text || undefined,
-        })
+  // media ko direct forward karo (safe)
+  await client.forwardMessages(TARGET_ID, {
+    messages: [msg.id],
+    fromPeer: msg.peerId,
+  })
+} else {
+  // text-only message with replacement
+  await client.sendMessage(TARGET_ID, { message: text })
+}
       } else {
         await client.sendMessage(TARGET_ID, { message: text })
       }
