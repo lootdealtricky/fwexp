@@ -35,6 +35,8 @@ function replaceText(text) {
 🙏ADD YOUR FRIENDS & RELATIVES ON  👉 @LOOTDEALTRICKY 👈 CHANNEL
 
 Search @Lootdealtricky in Telegram App
+
+and Check First pinned Post
 `
 
   return text.replace(oldBlock, newBlock)
