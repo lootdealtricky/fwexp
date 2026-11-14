@@ -21,12 +21,10 @@ const SOURCE_IDS = process.env.SOURCE_IDS
   .split(",")
   .map(x => x.trim())
 
-const DEFAULT_TARGET_ID = process.env.TARGET_ID
-const FLIPKART_TARGET_ID = "-1006239883508"
-const FLIPKART_SOURCE_ID = "-1001276984126"
+const TARGET_ID = process.env.TARGET_ID
 
 console.log("📌 Configured Source IDs:", SOURCE_IDS)
-console.log("📌 Default Target ID:", DEFAULT_TARGET_ID)
+console.log("📌 Target ID:", TARGET_ID)
 
 /* ========= CLIENT ========= */
 
@@ -42,24 +40,6 @@ const client = new TelegramClient(
 /* ========= CACHE ========= */
 
 const processedMessages = new Set()
-
-/* ========= TEXT REPLACER ========= */
-
-function replaceText(text = "") {
-  const oldBlock =
-    /#Meesho[\s\S]*?Lootdealtricky\.in\/url\/channels/gi
-
-  const newBlock = `#Flipkart
-#Amazon
-#Myntra
-
-🔥 BEST DEALS DAILY 🔥
-
-🙏 SUPPORT US:
-👉 @LOOTDEALTRICKY
-`
-  return text.replace(oldBlock, newBlock)
-}
 
 /* ========= URL EXTRACT ========= */
 
@@ -95,35 +75,9 @@ function decodeUrl(url) {
   }
 }
 
-/* ========= MEESHO DETECTION ========= */
-
-async function containsMeesho(urls) {
-  const patterns = [
-    "meesho.com",
-    "msho.in",
-    "meesho.io",
-    "meesho",
-  ]
-
-  for (const url of urls) {
-    const expanded = await expandUrl(url)
-    const decoded = decodeUrl(expanded)
-    const finalUrl = expanded.toLowerCase() + " " + decoded.toLowerCase()
-
-    for (const pattern of patterns) {
-      if (finalUrl.includes(pattern)) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
 /* ========= FLIPKART SHORT URL CHECKER ========= */
 
-async function checkFlipkartShortUrl(chatId, urls) {
-  if (chatId !== FLIPKART_SOURCE_ID) return true
-
+async function checkFlipkartShortUrl(urls) {
   for (const url of urls) {
     if (url.includes("cuttli.in") || url.includes("cutt.ly") || url.includes("amzn.to") || url.length < 35) {
       const expanded = await expandUrl(url)
@@ -161,7 +115,7 @@ async function startBot() {
     onError: err => console.log("Telegram Error:", err),
   })
 
-  console.log("✅ USERBOT STARTED & LISTENING FOR MESSAGES...")
+  console.log("✅ USERBOT STARTED & LISTENING FOR FLIPKART POSTS...")
 
   client.addEventHandler(async (event) => {
     try {
@@ -169,15 +123,14 @@ async function startBot() {
       if (!msg) return
 
       const chatId = String(event.chatId)
-      console.log(`📩 New message received from Chat ID: ${chatId}`)
-
-      if (msg.out || msg.action) return
 
       if (!SOURCE_IDS.includes(chatId)) {
-        // अगर आईडी मैच नहीं होगी तो यहाँ दिखेगा ताकि आपको पता चल सके कि किस चैनल से मैसेज आ रहा है
-        console.log(`❌ Ignored: Chat ID ${chatId} is not in SOURCE_IDS`)
-        return
+        return // बाकी दूसरे चैनल्स को चुपचाप इग्नोर कर देगा
       }
+
+      console.log(`📩 Message received from Target Source ID: ${chatId}`)
+
+      if (msg.out || msg.action) return
 
       let text = msg.text || msg.message || ""
       const hash = generateHash(chatId + "_" + msg.id)
@@ -190,66 +143,28 @@ async function startBot() {
       processedMessages.add(hash)
       const urls = extractUrls(text)
 
-      /* ==========================================================
-         SCENARIO A: FLIPKART / CUTT.LY SYSTEM FOR -1001276984126
-         ========================================================== */
-      if (chatId === FLIPKART_SOURCE_ID) {
-        console.log("🎯 Processing Flipkart source channel message...")
-        if (urls.length === 0) {
-          console.log("⛔ Skipped: No URLs found in post.")
-          return
-        }
-
-        const isValidFlipkart = await checkFlipkartShortUrl(chatId, urls)
-        if (!isValidFlipkart) {
-          console.log("⛔ Skipped: Short URL did not resolve to Flipkart.")
-          return
-        }
-
-        await sleep(Math.floor(Math.random() * 2000))
-
-        if (msg.media) {
-          console.log("📥 Downloading media for Flipkart target...")
-          const filePath = await client.downloadMedia(msg.media, { workers: 1 })
-          console.log("📤 Sending media to Flipkart target...")
-
-          await client.sendFile(FLIPKART_TARGET_ID, {
-            file: filePath,
-            caption: text || "",
-          })
-
-          if (filePath && fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath)
-          }
-        } else {
-          if (text.trim()) {
-            await client.sendMessage(FLIPKART_TARGET_ID, { message: text })
-          }
-        }
-
-        console.log("✅ Flipkart Post Sent Successfully!")
+      if (urls.length === 0) {
+        console.log("⛔ Skipped: No URLs found in post.")
         return
       }
 
-      /* ==========================================================
-         SCENARIO B: NORMAL / MEESHO SYSTEM FOR OTHER SOURCES
-         ========================================================== */
-      console.log("🎯 Processing other source channel message...")
-
-      if (urls.length && await containsMeesho(urls)) {
-        console.log("⛔ Skipped Meesho")
+      // चेक करें कि शॉर्ट यूआरएल फ्लिपकार्ट का है या नहीं
+      const isValidFlipkart = await checkFlipkartShortUrl(urls)
+      if (!isValidFlipkart) {
+        console.log("⛔ Skipped: Short URL did not resolve to Flipkart.")
         return
       }
 
-      text = replaceText(text)
+      // रैंडम डिले
       await sleep(Math.floor(Math.random() * 2000))
 
+      // Media या Text को बिल्कुल As It Is फॉरवर्ड करना
       if (msg.media) {
-        console.log("📥 Downloading media for default target...")
+        console.log("📥 Downloading media...")
         const filePath = await client.downloadMedia(msg.media, { workers: 1 })
-        console.log("📤 Sending media to default target...")
+        console.log("📤 Sending media to target...")
 
-        await client.sendFile(DEFAULT_TARGET_ID, {
+        await client.sendFile(TARGET_ID, {
           file: filePath,
           caption: text || "",
         })
@@ -259,11 +174,11 @@ async function startBot() {
         }
       } else {
         if (text.trim()) {
-          await client.sendMessage(DEFAULT_TARGET_ID, { message: text })
+          await client.sendMessage(TARGET_ID, { message: text })
         }
       }
 
-      console.log("✅ Normal Post Posted Successfully!")
+      console.log("✅ Flipkart Post Sent Successfully!")
 
     } catch (e) {
       console.error("❌ ERROR inside event handler:", e.message)
