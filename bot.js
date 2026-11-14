@@ -119,28 +119,46 @@ async function containsMeesho(urls) {
   for (const url of urls) {
 
     const expanded = await expandUrl(url)
-
     const decoded = decodeUrl(expanded)
+    const finalUrl = expanded.toLowerCase() + " " + decoded.toLowerCase()
 
-    const finalUrl =
-      expanded.toLowerCase() +
-      " " +
-      decoded.toLowerCase()
-
-    console.log("🔗 Checking:", finalUrl)
+    console.log("🔗 Checking Meesho:", finalUrl)
 
     for (const pattern of patterns) {
-
       if (finalUrl.includes(pattern)) {
-
         console.log("⛔ Meesho Detected")
-
         return true
       }
     }
   }
 
   return false
+}
+
+/* ========= FLIPKART SHORT URL CHECKER (-1001276984126) ========= */
+
+async function checkFlipkartShortUrl(chatId, urls) {
+  // सिर्फ खास चैट (-1001276984126) के लिए लागू करें
+  if (chatId !== "-1001276984126") return true
+
+  for (const url of urls) {
+    // अगर URL में cuttli.in या cutt.ly या कोई भी shortner दिखे
+    if (url.includes("cuttli.in") || url.includes("cutt.ly") || url.includes("amzn.to") || url.length < 35) {
+      const expanded = await expandUrl(url)
+      const decoded = decodeUrl(expanded).toLowerCase()
+
+      console.log("🔍 Unshortened URL Check:", decoded)
+
+      // यदि अनशॉर्ट करने पर flipkart मिल जाता है
+      if (decoded.includes("flipkart.com") || decoded.includes("fkrt.it")) {
+        console.log("✅ Flipkart detected in short URL! Proceeding to post original shorted post.")
+        return true
+      }
+    }
+  }
+
+  // अगर कोई शॉर्ट यूआरएल नहीं है या फ्लिपकार्ट नहीं निकला तो सामान्य नियम चलेंगे
+  return true
 }
 
 /* ========= HASH ========= */
@@ -186,7 +204,7 @@ async function startBot() {
       if (!SOURCE_IDS.includes(chatId))
         return
 
-      let text = msg.text || ""
+      let text = msg.text || msg.message || ""
 
       const hash = generateHash(
         chatId + "_" + msg.id
@@ -202,6 +220,15 @@ async function startBot() {
       processedMessages.add(hash)
 
       const urls = extractUrls(text)
+
+      /* ========= CHECK FLIPKART SHORT URL SYSTEM (-1001276984126) ========= */
+      if (chatId === "-1001276984126" && urls.length > 0) {
+        const isValidFlipkart = await checkFlipkartShortUrl(chatId, urls)
+        if (!isValidFlipkart) {
+          console.log("⛔ Skipped: Short URL did not match Flipkart criteria.")
+          return
+        }
+      }
 
       /* ========= SKIP MEESHO ========= */
 
@@ -223,11 +250,11 @@ async function startBot() {
         Math.floor(Math.random() * 3000)
       )
 
-      /* ========= MEDIA ========= */
+      /* ========= MEDIA (Photo Fix Included) ========= */
 
       if (msg.media) {
 
-        console.log("📥 Downloading media")
+        console.log("📥 Downloading media as photo...")
 
         const filePath =
           await client.downloadMedia(
@@ -238,15 +265,15 @@ async function startBot() {
           )
 
         console.log(
-          "📤 Re-uploading media"
+          "📤 Re-uploading media to target..."
         )
 
+        // GramJS में फोटो को सही से भेजने के लिए file path सीधा पास करते हैं और forceDocument हटाने से यह फोटो/वीडियो रूप में जाती है
         await client.sendFile(
           TARGET_ID,
           {
             file: filePath,
             caption: text || "",
-            forceDocument: false,
           }
         )
 
