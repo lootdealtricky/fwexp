@@ -7,21 +7,22 @@ import fs from "fs"
 import path from "path"
 import crypto from "crypto"
 
-/* ========= ENV ========= */
+/* ========= ENV (Safe Fallbacks Added) ========= */
 
 const apiId = Number(process.env.API_ID)
 const apiHash = process.env.API_HASH
-const stringSession = new StringSession(process.env.STRING_SESSION)
+const stringSession = new StringSession(process.env.STRING_SESSION || "")
 
 if (!apiId || !apiHash || !process.env.STRING_SESSION) {
-  throw new Error("Missing ENV variables")
+  console.error("❌ Missing API_ID, API_HASH or STRING_SESSION variables!")
 }
 
-const SOURCE_IDS = process.env.SOURCE_IDS
-  .split(",")
-  .map(x => x.trim())
+// अगर Render पर SOURCE_IDS नहीं मिला तो यह अपने आप यह डिफ़ॉल्ट आईडी ले लेगा
+const rawSources = process.env.SOURCE_IDS || "-1001276984126"
+const SOURCE_IDS = rawSources.split(",").map(x => x.trim())
 
-const TARGET_ID = process.env.TARGET_ID
+// अगर Render पर TARGET_ID नहीं मिला तो यह @ekconverter15bot या -1006239883508 पर भेजेगा
+const TARGET_ID = process.env.TARGET_ID || "-1006239883508"
 
 console.log("📌 Configured Source IDs:", SOURCE_IDS)
 console.log("📌 Target ID:", TARGET_ID)
@@ -125,10 +126,10 @@ async function startBot() {
       const chatId = String(event.chatId)
 
       if (!SOURCE_IDS.includes(chatId)) {
-        return // बाकी दूसरे चैनल्स को चुपचाप इग्नोर कर देगा
+        return 
       }
 
-      console.log(`📩 Message received from Target Source ID: ${chatId}`)
+      console.log(`📩 Message received from Source ID: ${chatId}`)
 
       if (msg.out || msg.action) return
 
@@ -148,17 +149,14 @@ async function startBot() {
         return
       }
 
-      // चेक करें कि शॉर्ट यूआरएल फ्लिपकार्ट का है या नहीं
       const isValidFlipkart = await checkFlipkartShortUrl(urls)
       if (!isValidFlipkart) {
         console.log("⛔ Skipped: Short URL did not resolve to Flipkart.")
         return
       }
 
-      // रैंडम डिले
       await sleep(Math.floor(Math.random() * 2000))
 
-      // Media या Text को बिल्कुल As It Is फॉरवर्ड करना
       if (msg.media) {
         console.log("📥 Downloading media...")
         const filePath = await client.downloadMedia(msg.media, { workers: 1 })
