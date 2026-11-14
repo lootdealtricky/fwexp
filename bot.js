@@ -21,7 +21,12 @@ const SOURCE_IDS = process.env.SOURCE_IDS
   .split(",")
   .map(x => x.trim())
 
-const TARGET_ID = process.env.TARGET_ID
+// पुराना/डिफ़ॉल्ट टारगेट ID (बाकी चैनल्स के लिए)
+const DEFAULT_TARGET_ID = process.env.TARGET_ID
+
+// Flipkart / Cutt.ly वाले खास चैनल के लिए नया टारगेट ID
+const FLIPKART_TARGET_ID = "-1006239883508"
+const FLIPKART_SOURCE_ID = "-1001276984126"
 
 /* ========= CLIENT ========= */
 
@@ -38,10 +43,9 @@ const client = new TelegramClient(
 
 const processedMessages = new Set()
 
-/* ========= TEXT REPLACER ========= */
+/* ========= TEXT REPLACER (For other sources) ========= */
 
 function replaceText(text = "") {
-
   const oldBlock =
     /#Meesho[\s\S]*?Lootdealtricky\.in\/url\/channels/gi
 
@@ -67,26 +71,17 @@ function extractUrls(text = "") {
 /* ========= EXPAND URL ========= */
 
 async function expandUrl(url) {
-
   try {
-
     const response = await axios.get(url, {
       maxRedirects: 10,
       timeout: 10000,
       validateStatus: null,
       headers: {
-        "User-Agent":
-          "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0",
       },
     })
-
-    return (
-      response.request?.res?.responseUrl ||
-      url
-    )
-
+    return response.request?.res?.responseUrl || url
   } catch {
-
     return url
   }
 }
@@ -94,21 +89,16 @@ async function expandUrl(url) {
 /* ========= DECODE URL ========= */
 
 function decodeUrl(url) {
-
   try {
-
     return decodeURIComponent(url)
-
   } catch {
-
     return url
   }
 }
 
-/* ========= STRONG MEESHO DETECTION ========= */
+/* ========= MEESHO DETECTION ========= */
 
 async function containsMeesho(urls) {
-
   const patterns = [
     "meesho.com",
     "msho.in",
@@ -117,7 +107,6 @@ async function containsMeesho(urls) {
   ]
 
   for (const url of urls) {
-
     const expanded = await expandUrl(url)
     const decoded = decodeUrl(expanded)
     const finalUrl = expanded.toLowerCase() + " " + decoded.toLowerCase()
@@ -138,33 +127,28 @@ async function containsMeesho(urls) {
 /* ========= FLIPKART SHORT URL CHECKER (-1001276984126) ========= */
 
 async function checkFlipkartShortUrl(chatId, urls) {
-  // सिर्फ खास चैट (-1001276984126) के लिए लागू करें
-  if (chatId !== "-1001276984126") return true
+  if (chatId !== FLIPKART_SOURCE_ID) return true
 
   for (const url of urls) {
-    // अगर URL में cuttli.in या cutt.ly या कोई भी shortner दिखे
     if (url.includes("cuttli.in") || url.includes("cutt.ly") || url.includes("amzn.to") || url.length < 35) {
       const expanded = await expandUrl(url)
       const decoded = decodeUrl(expanded).toLowerCase()
 
       console.log("🔍 Unshortened URL Check:", decoded)
 
-      // यदि अनशॉर्ट करने पर flipkart मिल जाता है
       if (decoded.includes("flipkart.com") || decoded.includes("fkrt.it")) {
-        console.log("✅ Flipkart detected in short URL! Proceeding to post original shorted post.")
+        console.log("✅ Flipkart detected in short URL! Allowed.")
         return true
       }
     }
   }
 
-  // अगर कोई शॉर्ट यूआरएल नहीं है या फ्लिपकार्ट नहीं निकला तो सामान्य नियम चलेंगे
-  return true
+  return false
 }
 
 /* ========= HASH ========= */
 
 function generateHash(text) {
-
   return crypto
     .createHash("md5")
     .update(text)
@@ -211,9 +195,7 @@ async function startBot() {
       )
 
       if (processedMessages.has(hash)) {
-
         console.log("⚠️ Duplicate skipped")
-
         return
       }
 
@@ -221,107 +203,91 @@ async function startBot() {
 
       const urls = extractUrls(text)
 
-      /* ========= CHECK FLIPKART SHORT URL SYSTEM (-1001276984126) ========= */
-      if (chatId === "-1001276984126" && urls.length > 0) {
-        const isValidFlipkart = await checkFlipkartShortUrl(chatId, urls)
-        if (!isValidFlipkart) {
-          console.log("⛔ Skipped: Short URL did not match Flipkart criteria.")
+      /* ==========================================================
+         SCENARIO A: FLIPKART / CUTT.LY SYSTEM FOR -1001276984126
+         ========================================================== */
+      if (chatId === FLIPKART_SOURCE_ID) {
+        if (urls.length === 0) {
+          console.log("⛔ Skipped: No URLs found in Flipkart source post.")
           return
         }
+
+        const isValidFlipkart = await checkFlipkartShortUrl(chatId, urls)
+        if (!isValidFlipkart) {
+          console.log("⛔ Skipped: Short URL did not resolve to Flipkart.")
+          return
+        }
+
+        // रैंडम डिले
+        await sleep(Math.floor(Math.random() * 3000))
+
+        // Copy As It Is posting to Flipkart Target
+        if (msg.media) {
+          console.log("📥 Downloading media for Flipkart target...")
+          const filePath = await client.downloadMedia(msg.media, { workers: 1 })
+          console.log("📤 Re-uploading media (As it is) to Flipkart target...")
+
+          await client.sendFile(FLIPKART_TARGET_ID, {
+            file: filePath,
+            caption: text || "",
+          })
+
+          if (filePath && fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+          }
+        } else {
+          if (text.trim()) {
+            await client.sendMessage(FLIPKART_TARGET_ID, { message: text })
+          }
+        }
+
+        console.log("✅ Flipkart Post Sent Successfully (Copy As It Is)")
+        return; // यहाँ से बाहर निकल जाओ ताकि नीचे वाला नॉर्मल कोड इसपर न चले
       }
 
-      /* ========= SKIP MEESHO ========= */
-
-      if (
-        urls.length &&
-        await containsMeesho(urls)
-      ) {
-
+      /* ==========================================================
+         SCENARIO B: NORMAL / MEESHO SYSTEM FOR OTHER SOURCES
+         ========================================================== */
+      
+      // SKIP MEESHO
+      if (urls.length && await containsMeesho(urls)) {
         console.log("⛔ Skipped Meesho")
-
         return
       }
 
+      // TEXT REPLACE
       text = replaceText(text)
 
-      /* ========= RANDOM DELAY ========= */
+      // रैंडम डिले
+      await sleep(Math.floor(Math.random() * 3000))
 
-      await sleep(
-        Math.floor(Math.random() * 3000)
-      )
-
-      /* ========= MEDIA (Photo Fix Included) ========= */
-
+      // Normal Media Posting
       if (msg.media) {
+        console.log("📥 Downloading media for default target...")
+        const filePath = await client.downloadMedia(msg.media, { workers: 1 })
+        console.log("📤 Re-uploading media to default target...")
 
-        console.log("📥 Downloading media as photo...")
+        await client.sendFile(DEFAULT_TARGET_ID, {
+          file: filePath,
+          caption: text || "",
+        })
 
-        const filePath =
-          await client.downloadMedia(
-            msg.media,
-            {
-              workers: 1,
-            }
-          )
-
-        console.log(
-          "📤 Re-uploading media to target..."
-        )
-
-        // GramJS में फोटो को सही से भेजने के लिए file path सीधा पास करते हैं और forceDocument हटाने से यह फोटो/वीडियो रूप में जाती है
-        await client.sendFile(
-          TARGET_ID,
-          {
-            file: filePath,
-            caption: text || "",
-          }
-        )
-
-        /* cleanup */
-
-        if (
-          filePath &&
-          fs.existsSync(filePath)
-        ) {
-
+        if (filePath && fs.existsSync(filePath)) {
           fs.unlinkSync(filePath)
         }
-
       } else {
-
-        /* ========= TEXT ========= */
-
         if (text.trim()) {
-
-          await client.sendMessage(
-            TARGET_ID,
-            {
-              message: text,
-            }
-          )
+          await client.sendMessage(DEFAULT_TARGET_ID, { message: text })
         }
       }
 
-      console.log("✅ Posted Successfully")
+      console.log("✅ Normal Post Posted Successfully")
 
     } catch (e) {
+      console.error("❌ ERROR:", e.message)
 
-      console.error(
-        "❌ ERROR:",
-        e.message
-      )
-
-      /* FLOOD WAIT */
-
-      if (
-        e.errorMessage?.includes(
-          "FLOOD_WAIT"
-        )
-      ) {
-
-        console.log(
-          "⏳ Flood wait triggered"
-        )
+      if (e.errorMessage?.includes("FLOOD_WAIT")) {
+        console.log("⏳ Flood wait triggered")
       }
     }
 
@@ -331,23 +297,15 @@ async function startBot() {
 /* ========= KEEP ALIVE ========= */
 
 function startServer() {
-
-  const PORT =
-    process.env.PORT || 10000
+  const PORT = process.env.PORT || 10000
 
   http
     .createServer((req, res) => {
-
       res.writeHead(200)
-
       res.end("Bot Running")
     })
     .listen(PORT, () => {
-
-      console.log(
-        "🌐 Server Running:",
-        PORT
-      )
+      console.log("🌐 Server Running:", PORT)
     })
 }
 
