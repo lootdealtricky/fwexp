@@ -21,12 +21,12 @@ const SOURCE_IDS = process.env.SOURCE_IDS
   .split(",")
   .map(x => x.trim())
 
-// पुराना/डिफ़ॉल्ट टारगेट ID (बाकी चैनल्स के लिए)
 const DEFAULT_TARGET_ID = process.env.TARGET_ID
-
-// Flipkart / Cutt.ly वाले खास चैनल के लिए नया टारगेट ID
 const FLIPKART_TARGET_ID = "-1006239883508"
 const FLIPKART_SOURCE_ID = "-1001276984126"
+
+console.log("📌 Configured Source IDs:", SOURCE_IDS)
+console.log("📌 Default Target ID:", DEFAULT_TARGET_ID)
 
 /* ========= CLIENT ========= */
 
@@ -43,7 +43,7 @@ const client = new TelegramClient(
 
 const processedMessages = new Set()
 
-/* ========= TEXT REPLACER (For other sources) ========= */
+/* ========= TEXT REPLACER ========= */
 
 function replaceText(text = "") {
   const oldBlock =
@@ -58,7 +58,6 @@ function replaceText(text = "") {
 🙏 SUPPORT US:
 👉 @LOOTDEALTRICKY
 `
-
   return text.replace(oldBlock, newBlock)
 }
 
@@ -111,20 +110,16 @@ async function containsMeesho(urls) {
     const decoded = decodeUrl(expanded)
     const finalUrl = expanded.toLowerCase() + " " + decoded.toLowerCase()
 
-    console.log("🔗 Checking Meesho:", finalUrl)
-
     for (const pattern of patterns) {
       if (finalUrl.includes(pattern)) {
-        console.log("⛔ Meesho Detected")
         return true
       }
     }
   }
-
   return false
 }
 
-/* ========= FLIPKART SHORT URL CHECKER (-1001276984126) ========= */
+/* ========= FLIPKART SHORT URL CHECKER ========= */
 
 async function checkFlipkartShortUrl(chatId, urls) {
   if (chatId !== FLIPKART_SOURCE_ID) return true
@@ -137,12 +132,10 @@ async function checkFlipkartShortUrl(chatId, urls) {
       console.log("🔍 Unshortened URL Check:", decoded)
 
       if (decoded.includes("flipkart.com") || decoded.includes("fkrt.it")) {
-        console.log("✅ Flipkart detected in short URL! Allowed.")
         return true
       }
     }
   }
-
   return false
 }
 
@@ -164,35 +157,30 @@ function sleep(ms) {
 /* ========= MAIN ========= */
 
 async function startBot() {
-
   await client.start({
-    onError: err => console.log(err),
+    onError: err => console.log("Telegram Error:", err),
   })
 
-  console.log("✅ USERBOT STARTED")
+  console.log("✅ USERBOT STARTED & LISTENING FOR MESSAGES...")
 
   client.addEventHandler(async (event) => {
-
     try {
-
       const msg = event.message
-
-      if (
-        !msg ||
-        msg.out ||
-        msg.action
-      ) return
+      if (!msg) return
 
       const chatId = String(event.chatId)
+      console.log(`📩 New message received from Chat ID: ${chatId}`)
 
-      if (!SOURCE_IDS.includes(chatId))
+      if (msg.out || msg.action) return
+
+      if (!SOURCE_IDS.includes(chatId)) {
+        // अगर आईडी मैच नहीं होगी तो यहाँ दिखेगा ताकि आपको पता चल सके कि किस चैनल से मैसेज आ रहा है
+        console.log(`❌ Ignored: Chat ID ${chatId} is not in SOURCE_IDS`)
         return
+      }
 
       let text = msg.text || msg.message || ""
-
-      const hash = generateHash(
-        chatId + "_" + msg.id
-      )
+      const hash = generateHash(chatId + "_" + msg.id)
 
       if (processedMessages.has(hash)) {
         console.log("⚠️ Duplicate skipped")
@@ -200,15 +188,15 @@ async function startBot() {
       }
 
       processedMessages.add(hash)
-
       const urls = extractUrls(text)
 
       /* ==========================================================
          SCENARIO A: FLIPKART / CUTT.LY SYSTEM FOR -1001276984126
          ========================================================== */
       if (chatId === FLIPKART_SOURCE_ID) {
+        console.log("🎯 Processing Flipkart source channel message...")
         if (urls.length === 0) {
-          console.log("⛔ Skipped: No URLs found in Flipkart source post.")
+          console.log("⛔ Skipped: No URLs found in post.")
           return
         }
 
@@ -218,14 +206,12 @@ async function startBot() {
           return
         }
 
-        // रैंडम डिले
-        await sleep(Math.floor(Math.random() * 3000))
+        await sleep(Math.floor(Math.random() * 2000))
 
-        // Copy As It Is posting to Flipkart Target
         if (msg.media) {
           console.log("📥 Downloading media for Flipkart target...")
           const filePath = await client.downloadMedia(msg.media, { workers: 1 })
-          console.log("📤 Re-uploading media (As it is) to Flipkart target...")
+          console.log("📤 Sending media to Flipkart target...")
 
           await client.sendFile(FLIPKART_TARGET_ID, {
             file: filePath,
@@ -241,31 +227,27 @@ async function startBot() {
           }
         }
 
-        console.log("✅ Flipkart Post Sent Successfully (Copy As It Is)")
-        return; // यहाँ से बाहर निकल जाओ ताकि नीचे वाला नॉर्मल कोड इसपर न चले
+        console.log("✅ Flipkart Post Sent Successfully!")
+        return
       }
 
       /* ==========================================================
          SCENARIO B: NORMAL / MEESHO SYSTEM FOR OTHER SOURCES
          ========================================================== */
-      
-      // SKIP MEESHO
+      console.log("🎯 Processing other source channel message...")
+
       if (urls.length && await containsMeesho(urls)) {
         console.log("⛔ Skipped Meesho")
         return
       }
 
-      // TEXT REPLACE
       text = replaceText(text)
+      await sleep(Math.floor(Math.random() * 2000))
 
-      // रैंडम डिले
-      await sleep(Math.floor(Math.random() * 3000))
-
-      // Normal Media Posting
       if (msg.media) {
         console.log("📥 Downloading media for default target...")
         const filePath = await client.downloadMedia(msg.media, { workers: 1 })
-        console.log("📤 Re-uploading media to default target...")
+        console.log("📤 Sending media to default target...")
 
         await client.sendFile(DEFAULT_TARGET_ID, {
           file: filePath,
@@ -281,16 +263,11 @@ async function startBot() {
         }
       }
 
-      console.log("✅ Normal Post Posted Successfully")
+      console.log("✅ Normal Post Posted Successfully!")
 
     } catch (e) {
-      console.error("❌ ERROR:", e.message)
-
-      if (e.errorMessage?.includes("FLOOD_WAIT")) {
-        console.log("⏳ Flood wait triggered")
-      }
+      console.error("❌ ERROR inside event handler:", e.message)
     }
-
   }, new NewMessage({}))
 }
 
@@ -298,14 +275,13 @@ async function startBot() {
 
 function startServer() {
   const PORT = process.env.PORT || 10000
-
   http
     .createServer((req, res) => {
       res.writeHead(200)
       res.end("Bot Running")
     })
     .listen(PORT, () => {
-      console.log("🌐 Server Running:", PORT)
+      console.log("🌐 Server Running on port:", PORT)
     })
 }
 
