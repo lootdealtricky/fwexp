@@ -1,6 +1,6 @@
-const { TelegramClient } = require("telegram");
-const { StringSession } = require("telegram/sessions");
-const input = require("input"); // terminal input ke liye agar zarurat ho
+import { TelegramClient } from "telegram";
+import { StringSession } from "telegram/sessions";
+import input from "input";
 
 const apiId = YOUR_API_ID; // Apna API ID yahan dalein
 const apiHash = "YOUR_API_HASH"; // Apna API Hash yahan dalein
