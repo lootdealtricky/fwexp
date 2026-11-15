@@ -22,7 +22,7 @@ const rawSources = process.env.SOURCE_IDS || "-1001276984126"
 const SOURCE_IDS = rawSources.split(",").map(x => x.trim())
 
 // अगर Render पर TARGET_ID नहीं मिला तो यह @ekconverter15bot या -1006239883508 पर भेजेगा
-const TARGET_ID = process.env.TARGET_ID || "-1006239883508"
+const TARGET_ID = process.env.TARGET_ID || "-1003803600664"
 
 console.log("📌 Configured Source IDs:", SOURCE_IDS)
 console.log("📌 Target ID:", TARGET_ID)
