@@ -1,5 +1,5 @@
 import { TelegramClient } from "telegram";
-import { StringSession } from "telegram/sessions";
+import { StringSession } from "telegram/sessions/index.js";
 import input from "input";
 
 const apiId = YOUR_API_ID; // Apna API ID yahan dalein
