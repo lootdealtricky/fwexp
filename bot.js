@@ -7,22 +7,19 @@ import fs from "fs"
 import path from "path"
 import crypto from "crypto"
 
-/* ========= ENV (Safe Fallbacks Added) ========= */
+/* ========= ENV ========= */
 
 const apiId = Number(process.env.API_ID)
 const apiHash = process.env.API_HASH
-const stringSession = new StringSession(process.env.STRING_SESSION || "")
+const stringSession = new StringSession(process.env.STRING_SESSION)
 
 if (!apiId || !apiHash || !process.env.STRING_SESSION) {
   console.error("❌ Missing API_ID, API_HASH or STRING_SESSION variables!")
 }
 
-// अगर Render पर SOURCE_IDS नहीं मिला तो यह अपने आप यह डिफ़ॉल्ट आईडी ले लेगा
 const rawSources = process.env.SOURCE_IDS || "-1001276984126"
 const SOURCE_IDS = rawSources.split(",").map(x => x.trim())
-
-// अगर Render पर TARGET_ID नहीं मिला तो यह @ekconverter15bot या -1006239883508 पर भेजेगा
-const TARGET_ID = process.env.TARGET_ID || "-1003803600664"
+const TARGET_ID = process.env.TARGET_ID || "-1006239883508"
 
 console.log("📌 Configured Source IDs:", SOURCE_IDS)
 console.log("📌 Target ID:", TARGET_ID)
@@ -48,22 +45,49 @@ function extractUrls(text = "") {
   return text.match(/https?:\/\/[^\s]+/gi) || []
 }
 
-/* ========= EXPAND URL ========= */
+/* ========= ADVANCED MULTI-REDIRECT URL EXPANDER ========= */
 
 async function expandUrl(url) {
+  let currentUrl = url
   try {
-    const response = await axios.get(url, {
-      maxRedirects: 10,
-      timeout: 10000,
-      validateStatus: null,
-      headers: {
-        "User-Agent": "Mozilla/5.0",
-      },
-    })
-    return response.request?.res?.responseUrl || url
-  } catch {
-    return url
+    for (let i = 0; i < 5; i++) {
+      const response = await axios.get(currentUrl, {
+        maxRedirects: 0, // हम खुद रीडायरेक्ट ट्रैक करेंगे ताकि सारे बीच के लिंक्स पकड़ में आएँ
+        timeout: 10000,
+        validateStatus: (status) => status >= 200 && status < 400,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+      })
+
+      const redirectUrl = response.headers.location
+      if (!redirectUrl) {
+        break // आगे कोई रीडायरेक्ट नहीं है
+      }
+
+      // अगर रीडायरेक्ट रिलेटिव यूआरएल है तो उसे पूर्ण यूआरएल बनाएँ
+      if (redirectUrl.startsWith("http")) {
+        currentUrl = redirectUrl
+      } else {
+        const parsed = new URL(currentUrl)
+        currentUrl = `${parsed.protocol}//${parsed.host}${redirectUrl}`
+      }
+    }
+  } catch (err) {
+    // अगर axios को 3xx पर एरर आए तो response.headers.location से अगला यूआरएल निकालें
+    if (err.response && err.response.headers && err.response.headers.location) {
+      const loc = err.response.headers.location
+      if (loc.startsWith("http")) {
+        currentUrl = loc
+      } else {
+        try {
+          const parsed = new URL(currentUrl)
+          currentUrl = `${parsed.protocol}//${parsed.host}${loc}`
+        } catch {}
+      }
+    }
   }
+  return currentUrl
 }
 
 /* ========= DECODE URL ========= */
@@ -80,12 +104,15 @@ function decodeUrl(url) {
 
 async function checkFlipkartShortUrl(urls) {
   for (const url of urls) {
+    // सभी शॉर्टनर्स या छोटे लिंक्स को चेक करेगा
     if (url.includes("cuttli.in") || url.includes("cutt.ly") || url.includes("amzn.to") || url.length < 35) {
+      console.log("🔗 Unshortening short URL:", url)
       const expanded = await expandUrl(url)
       const decoded = decodeUrl(expanded).toLowerCase()
 
-      console.log("🔍 Unshortened URL Check:", decoded)
+      console.log("🔍 Final Resolved URL:", decoded)
 
+      // जाँच करें कि अंत में फ्लिपकार्ट आया या नहीं
       if (decoded.includes("flipkart.com") || decoded.includes("fkrt.it")) {
         return true
       }
@@ -124,12 +151,13 @@ async function startBot() {
       if (!msg) return
 
       const chatId = String(event.chatId)
+      console.log(`📩 Incoming message detected from Chat ID: ${chatId}`)
 
       if (!SOURCE_IDS.includes(chatId)) {
         return 
       }
 
-      console.log(`📩 Message received from Source ID: ${chatId}`)
+      console.log(`🎯 Match! Processing message from target source...`)
 
       if (msg.out || msg.action) return
 
@@ -143,6 +171,8 @@ async function startBot() {
 
       processedMessages.add(hash)
       const urls = extractUrls(text)
+
+      console.log("🔗 Extracted URLs:", urls)
 
       if (urls.length === 0) {
         console.log("⛔ Skipped: No URLs found in post.")
@@ -199,6 +229,5 @@ function startServer() {
 }
 
 /* ========= RUN ========= */
-
 startBot()
 startServer()
