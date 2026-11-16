@@ -20,12 +20,16 @@ const stringSession = new StringSession(process.env.STRING_SESSION || "");
 
   console.log("You should be connected now.");
   
-  // Saari chats aur unki IDs console mein print karne ke liye
-  console.log("Fetching all dialogs/channels...");
-  const dialogs = await client.getDialogs();
+  // Saari chats fetch karne ke liye limit: undefined taaki koi limit na rahe
+  console.log("Fetching all dialogs/channels (this may take a few seconds)...");
+  const dialogs = await client.getDialogs({ limit: undefined });
+  
+  console.log(`Total dialogs found: ${dialogs.length}`);
+
   for (const dialog of dialogs) {
     if (dialog.isChannel || dialog.isGroup) {
-      console.log(`Name: ${dialog.title} | ID: ${dialog.id}`);
+      const name = dialog.title || (dialog.entity && dialog.entity.title) || "Unknown Name";
+      console.log(`Name: ${name} | ID: ${dialog.id}`);
     }
   }
 
