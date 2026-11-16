@@ -142,7 +142,7 @@ async function startBot() {
   await client.start({
     onError: err => console.log("Telegram Error:", err),
   })
-
+  await client.getDialogs;
   console.log("✅ USERBOT STARTED & LISTENING FOR FLIPKART POSTS...")
 
   client.addEventHandler(async (event) => {
