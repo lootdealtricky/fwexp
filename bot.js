@@ -20,16 +20,14 @@ const stringSession = new StringSession(process.env.STRING_SESSION || "");
 
   console.log("You should be connected now.");
   
-  // Saari chats fetch karne ke liye limit: undefined taaki koi limit na rahe
-  console.log("Fetching all dialogs/channels (this may take a few seconds)...");
+  console.log("Fetching active dialogs/channels...");
   const dialogs = await client.getDialogs({ limit: undefined });
-  
-  console.log(`Total dialogs found: ${dialogs.length}`);
 
   for (const dialog of dialogs) {
-    if (dialog.isChannel || dialog.isGroup) {
-      const name = dialog.title || (dialog.entity && dialog.entity.title) || "Unknown Name";
-      console.log(`Name: ${name} | ID: ${dialog.id}`);
+    // Sirf wahi channel/group dikhao jo active hain aur jinki entity/title available hai
+    if ((dialog.isChannel || dialog.isGroup) && dialog.entity && !dialog.entity.left && !dialog.entity.kicked) {
+      const name = dialog.title || dialog.entity.title || "Unknown Name";
+      console.log(`Active Channel Name: ${name} | ID: ${dialog.id}`);
     }
   }
 
