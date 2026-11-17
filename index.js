@@ -52,7 +52,7 @@ async function expandUrl(url) {
   try {
     for (let i = 0; i < 5; i++) {
       const response = await axios.get(currentUrl, {
-        maxRedirects: 0, // हम खुद रीडायरेक्ट ट्रैक करेंगे ताकि सारे बीच के लिंक्स पकड़ में आएँ
+        maxRedirects: 0,
         timeout: 10000,
         validateStatus: (status) => status >= 200 && status < 400,
         headers: {
@@ -62,10 +62,9 @@ async function expandUrl(url) {
 
       const redirectUrl = response.headers.location
       if (!redirectUrl) {
-        break // आगे कोई रीडायरेक्ट नहीं है
+        break 
       }
 
-      // अगर रीडायरेक्ट रिलेटिव यूआरएल है तो उसे पूर्ण यूआरएल बनाएँ
       if (redirectUrl.startsWith("http")) {
         currentUrl = redirectUrl
       } else {
@@ -74,7 +73,6 @@ async function expandUrl(url) {
       }
     }
   } catch (err) {
-    // अगर axios को 3xx पर एरर आए तो response.headers.location से अगला यूआरएल निकालें
     if (err.response && err.response.headers && err.response.headers.location) {
       const loc = err.response.headers.location
       if (loc.startsWith("http")) {
@@ -104,7 +102,6 @@ function decodeUrl(url) {
 
 async function checkFlipkartShortUrl(urls) {
   for (const url of urls) {
-    // सभी शॉर्टनर्स या छोटे लिंक्स को चेक करेगा
     if (url.includes("cuttli.in") || url.includes("cutt.ly") || url.includes("amzn.to") || url.length < 35) {
       console.log("🔗 Unshortening short URL:", url)
       const expanded = await expandUrl(url)
@@ -112,7 +109,6 @@ async function checkFlipkartShortUrl(urls) {
 
       console.log("🔍 Final Resolved URL:", decoded)
 
-      // जाँच करें कि अंत में फ्लिपकार्ट आया या नहीं
       if (decoded.includes("flipkart.com") || decoded.includes("fkrt.it")) {
         return true
       }
@@ -142,7 +138,9 @@ async function startBot() {
   await client.start({
     onError: err => console.log("Telegram Error:", err),
   })
-  await client.getDialogs;
+  
+  // फिक्स: getDialogs एक फंक्शन है, इसलिए ब्रैकेट्स लगाना जरूरी है ताकि एंटिटी सही से लोड हो सकें
+  await client.getDialogs();
   console.log("✅ USERBOT STARTED & LISTENING FOR FLIPKART POSTS...")
 
   client.addEventHandler(async (event) => {
@@ -192,13 +190,21 @@ async function startBot() {
         const filePath = await client.downloadMedia(msg.media, { workers: 1 })
         console.log("📤 Sending media to target...")
 
+        // फिक्स: मीडिया का सही एक्सटेंशन (.jpg या .mp4) जोड़ना ताकि 'unnamed' फाइल न बने
+        let finalFilePath = filePath;
+        if (filePath && !path.extname(filePath)) {
+          const ext = msg.media.photo ? ".jpg" : (msg.media.document ? ".mp4" : ".jpg");
+          finalFilePath = filePath + ext;
+          fs.renameSync(filePath, finalFilePath);
+        }
+
         await client.sendFile(TARGET_ID, {
-          file: filePath,
+          file: finalFilePath,
           caption: text || "",
         })
 
-        if (filePath && fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath)
+        if (finalFilePath && fs.existsSync(finalFilePath)) {
+          fs.unlinkSync(finalFilePath)
         }
       } else {
         if (text.trim()) {
