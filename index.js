@@ -139,7 +139,6 @@ async function startBot() {
     onError: err => console.log("Telegram Error:", err),
   })
   
-  // फिक्स: getDialogs एक फंक्शन है, इसलिए ब्रैकेट्स लगाना जरूरी है ताकि एंटिटी सही से लोड हो सकें
   await client.getDialogs();
   console.log("✅ USERBOT STARTED & LISTENING FOR FLIPKART POSTS...")
 
@@ -186,22 +185,18 @@ async function startBot() {
       await sleep(Math.floor(Math.random() * 2000))
 
       if (msg.media) {
-            if (msg.media) {
         console.log("📥 Downloading media...")
         const mediaBuffer = await client.downloadMedia(msg.media, { workers: 1 })
         console.log("📤 Sending media to target...")
 
-        // फाइल का सही एक्सटेंशन तय करें (फोटो है तो .jpg, वीडियो है तो .mp4)
         const ext = msg.media.photo ? ".jpg" : (msg.media.document ? ".mp4" : ".jpg");
         const tempFilePath = path.join("/tmp", `flipkart_${Date.now()}${ext}`);
 
-        // अगर Buffer मिला है तो उसे डिस्क पर सही एक्सटेंशन के साथ सेव करें
         if (Buffer.isBuffer(mediaBuffer)) {
           fs.writeFileSync(tempFilePath, mediaBuffer);
         } else if (typeof mediaBuffer === "string" && fs.existsSync(mediaBuffer)) {
           fs.renameSync(mediaBuffer, tempFilePath);
         } else {
-          // अगर किसी कारण से मीडिया फाइल सेव न हो पाए तो सीधा टेक्स्ट भेज दें
           await client.sendMessage(TARGET_ID, { message: text })
           return;
         }
