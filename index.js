@@ -186,25 +186,33 @@ async function startBot() {
       await sleep(Math.floor(Math.random() * 2000))
 
       if (msg.media) {
+            if (msg.media) {
         console.log("📥 Downloading media...")
-        const filePath = await client.downloadMedia(msg.media, { workers: 1 })
+        const mediaBuffer = await client.downloadMedia(msg.media, { workers: 1 })
         console.log("📤 Sending media to target...")
 
-        // फिक्स: मीडिया का सही एक्सटेंशन (.jpg या .mp4) जोड़ना ताकि 'unnamed' फाइल न बने
-        let finalFilePath = filePath;
-        if (filePath && !path.extname(filePath)) {
-          const ext = msg.media.photo ? ".jpg" : (msg.media.document ? ".mp4" : ".jpg");
-          finalFilePath = filePath + ext;
-          fs.renameSync(filePath, finalFilePath);
+        // फाइल का सही एक्सटेंशन तय करें (फोटो है तो .jpg, वीडियो है तो .mp4)
+        const ext = msg.media.photo ? ".jpg" : (msg.media.document ? ".mp4" : ".jpg");
+        const tempFilePath = path.join("/tmp", `flipkart_${Date.now()}${ext}`);
+
+        // अगर Buffer मिला है तो उसे डिस्क पर सही एक्सटेंशन के साथ सेव करें
+        if (Buffer.isBuffer(mediaBuffer)) {
+          fs.writeFileSync(tempFilePath, mediaBuffer);
+        } else if (typeof mediaBuffer === "string" && fs.existsSync(mediaBuffer)) {
+          fs.renameSync(mediaBuffer, tempFilePath);
+        } else {
+          // अगर किसी कारण से मीडिया फाइल सेव न हो पाए तो सीधा टेक्स्ट भेज दें
+          await client.sendMessage(TARGET_ID, { message: text })
+          return;
         }
 
         await client.sendFile(TARGET_ID, {
-          file: finalFilePath,
+          file: tempFilePath,
           caption: text || "",
         })
 
-        if (finalFilePath && fs.existsSync(finalFilePath)) {
-          fs.unlinkSync(finalFilePath)
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath)
         }
       } else {
         if (text.trim()) {
